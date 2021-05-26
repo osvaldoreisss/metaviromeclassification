@@ -11,6 +11,8 @@ configfile: "config/config.yaml"
 
 samples = pd.read_csv(config["samples"], sep=",").set_index("sample", drop=False)
 
+threads = config['threads']
+
 def get_fasta(wildcards):
     fasta = samples.loc[(wildcards.sample), ["assembly"]].dropna()
     return f"{fasta.assembly}"
