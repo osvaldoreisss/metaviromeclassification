@@ -38,7 +38,7 @@ rule get_palmdb:
         "../envs/blast.yaml"
     shell:
         """
-        git -C resources clone git@github.com:rcedgar/palmdb.git
+        git -C resources clone https://github.com/rcedgar/palmdb.git
         gunzip resources/palmdb/2021-03-14/named.fa.gz
         makeblastdb -in resources/palmdb/2021-03-14/named.fa -dbtype prot
         """
