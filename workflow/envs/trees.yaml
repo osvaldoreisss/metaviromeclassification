@@ -1,0 +1,7 @@
+channels:
+    - conda-forge
+    - bioconda
+
+dependencies:
+    - muscle =3.8.1551
+    - fasttree =2.1.10

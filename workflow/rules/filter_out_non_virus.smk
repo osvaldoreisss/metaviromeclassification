@@ -194,3 +194,23 @@ rule create_family_cluster:
             out_dir = '/'.join(output[0].split('/')[:-1])
             with open(f"{out_dir}/{family}.fasta", 'w') as fout:
                 SeqIO.write(family_records, fout, "fasta")
+
+rule phylogenic_tree:
+    input: 
+        "results/families/{sample}/{sample}.ok"
+    output: 
+        "results/trees/{sample}/trees.ok"
+    conda:
+        "../envs/trees.yaml"
+    shell:
+        """
+        for fasta in `ls $(dirname {input[0]})/*.fasta`
+        do
+            out_msa=`echo $(dirname {output[0]})/$(basename $fasta).msa`
+            muscle -in $fasta -verbose  -quiet -out $out_msa
+            fasttree_out=$(dirname {output[0]})/$(basename $fasta).tree
+            FastTree $out_msa > $fasttree_out
+            touch {output[0]}
+        done
+        """ 
+
