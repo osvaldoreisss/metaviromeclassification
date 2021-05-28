@@ -1,12 +1,27 @@
-rule filter_out_non_virus:
-    input: get_fasta
-    output: "results/filter_out_non_virus/{sample}.fa"
+rule virsorter2_create_db:
+    output:
+        directory("results/virsorter2/db")
+    conda:
+        "../envs/virsorter2.yaml"
+    threads: threads
+    log:
+        "results/logs/virsorter2/db.log"
     shell:
-        """
-        echo {input}
-        cat {input} > {output}
-        """ 
+        "virsorter setup -d {output} -j {threads} 2> {log}"
 
+rule virsorter2_filter:
+    input: 
+        get_fasta,
+        "results/virsorter2/db"
+    output:
+        "results/virsorter2_filter/{sample}/final-viral-combined.fa"
+    conda:
+        "../envs/virsorter2.yaml"
+    threads: threads
+    log:
+        "results/logs/virsorter2_filter/{sample}.log"
+    shell:
+        "virsorter run --working-dir $(dirname {output}) --seqfile {input[0]} --jobs {threads} --min-score 0.7 --include-groups RNA --verbose 2> {log}"
 
 rule get_palmscan:
     output: 
@@ -19,16 +34,18 @@ rule get_palmscan:
 
 rule run_palmscan:
     input: 
-        "results/filter_out_non_virus/{sample}.fa",
+        "results/virsorter2_filter/{sample}/final-viral-combined.fa",
         "resources/palmscan"
     output:
         ppout="results/palmscan/{sample}_ppout.faa",
         ppout_nt="results/palmscan/{sample}_ppout_nt.fa",
         report="results/palmscan/{sample}_report.txt",
         fevout="results/palmscan/{sample}_fevout.fev"
+    log:
+        "results/logs/palmscan/{sample}.log"
     shell:
         """
-        ./resources/palmscan/bin/palmscan -search_pp {input[0]} -rdrp -ppout {output.ppout} -ppout_nt {output.ppout_nt} -report {output.report} -fevout {output.fevout}
+        ./resources/palmscan/bin/palmscan -search_pp {input[0]} -rdrp -ppout {output.ppout} -ppout_nt {output.ppout_nt} -report {output.report} -fevout {output.fevout} 2> {log}
         """
 
 rule get_palmdb:
@@ -41,6 +58,7 @@ rule get_palmdb:
         git -C resources clone https://github.com/rcedgar/palmdb.git
         gunzip resources/palmdb/2021-03-14/named.fa.gz
         makeblastdb -in resources/palmdb/2021-03-14/named.fa -dbtype prot
+        cd-hit -i resources/palmdb/2021-03-14/named.fa -o resources/palmdb/2021-03-14/named.fa.cdhit.90 -c 0.9
         """
 
 rule align_palmprint:
@@ -52,9 +70,11 @@ rule align_palmprint:
     threads: threads
     conda:
         "../envs/blast.yaml"
+    log:
+        "results/logs/blast/{sample}.log"
     shell:
         """
-        blastp -query {input[0]} -db {input[1]}/2021-03-14/named.fa -out {output} -outfmt 6 -num_alignments 10 -num_threads {threads}
+        blastp -query {input[0]} -db {input[1]}/2021-03-14/named.fa -out {output} -outfmt 6 -num_alignments 10 -num_threads {threads} 2> {log}
         """
 
 rule annotate_palmprint:
@@ -113,11 +133,64 @@ rule annotate_palmprint:
                     continue
                 max_key = max(blast_count, key=blast_count.get)
                 if blast_count[max_key] >= len(blast_result)/2:
-                    annotated_dict[key] = max_key
+                    for hit in blast_dict[key][thres]:
+                        if max_key in tax_dict[hit]:
+                            tax_full = tax_dict[hit]
+                    annotated_dict[key] = f"{max_key}\t{tax_full}"
                     break
                 else:
-                    annotated_dict[key] = "."
+                    annotated_dict[key] = f".\t"
         print(output)
         with open(str(output), 'w') as out:
             for key in annotated_dict.keys():
                 out.write(f"{key}\t{annotated_dict[key]}\n")
+
+rule create_family_cluster:
+    input: 
+        "results/annotate_palmprint/{sample}_annotated.tsv",
+        "results/palmscan/{sample}_ppout.faa",
+        "resources/palmdb"
+    output:
+        "results/families/{sample}/{sample}.ok"
+    run:
+        from Bio import SeqIO
+        import re
+        
+        with open(output[0], 'w') as out:
+            out.write('ok')
+
+        seqs_id_dict = dict()
+
+        with open(input[0]) as ann_handle:
+            for line in ann_handle:
+                fields = line.split("\t")
+                if fields[1] == ".":
+                    continue
+                family = re.findall(r'family:(.+?),',fields[2])[0]
+                if not family in seqs_id_dict:
+                    seqs_id_dict[family] = list()
+                seqs_id_dict[family].append(fields[0])
+
+        tax_dict = dict()
+        records = SeqIO.parse("resources/palmdb/2021-03-14/named.fa.cdhit.90", "fasta")
+        for record in records:
+            family = re.findall(r'family:(.+?),',record.description)
+            if not family:
+                continue
+            family = family[0]
+            if family in seqs_id_dict:
+                seqs_id_dict[family].append(record.id)
+
+        seq_dict_ann = SeqIO.to_dict(SeqIO.parse(input[1], "fasta"))
+        seq_dict_named = SeqIO.to_dict(SeqIO.parse("resources/palmdb/2021-03-14/named.fa.cdhit.90", "fasta"))
+        seq_dict_ann.update(seq_dict_named)
+
+        for family in seqs_id_dict:
+            family_records = list()
+            for seq_id in seqs_id_dict[family]:
+                if seq_id in seq_dict_ann:
+                    family_records.append(seq_dict_ann[seq_id])
+            
+            out_dir = '/'.join(output[0].split('/')[:-1])
+            with open(f"{out_dir}/{family}.fasta", 'w') as fout:
+                SeqIO.write(family_records, fout, "fasta")

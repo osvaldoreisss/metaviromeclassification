@@ -11,7 +11,10 @@ include: "rules/common.smk"
 
 rule all:
     input:
-        expand("results/annotate_palmprint/{sample}_annotated.tsv", sample=samples['sample'])
+        expand("results/annotate_palmprint/{sample}_annotated.tsv", sample=samples['sample']),
+        expand("results/families/{sample}/{sample}.ok", sample=samples['sample']),
+        "resources/palmdb"
+
         # The first rule should define the default target files
         # Subsequent target rules can be specified below. They should start with all_*.
 

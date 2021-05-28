@@ -1,6 +1,6 @@
 channels:
     - conda-forge
     - bioconda
+
 dependencies:
-    - blast =2.10.1
-    - cd-hit =4.8.1
+    - virsorter =2.2.2
