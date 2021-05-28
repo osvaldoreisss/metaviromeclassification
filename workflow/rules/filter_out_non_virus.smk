@@ -214,3 +214,17 @@ rule phylogenic_tree:
         done
         """ 
 
+rule plot_trees:
+    input: 
+        "results/trees/{sample}/trees.ok"
+    output: 
+        "results/trees/{sample}/trees_plot.ok"
+    shell:
+        """
+        for tree in `ls $(dirname {input[0]})/*.tree`
+        do
+        png=`echo $(dirname {output[0]})/$(basename $tree).png`
+        python workflow/scripts/plot_tree.py --tree_file $tree --out_file $png
+        touch {output[0]}
+        done
+        """

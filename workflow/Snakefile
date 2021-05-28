@@ -14,6 +14,7 @@ rule all:
         expand("results/annotate_palmprint/{sample}_annotated.tsv", sample=samples['sample']),
         expand("results/families/{sample}/{sample}.ok", sample=samples['sample']),
         expand("results/trees/{sample}/trees.ok", sample=samples['sample']),
+        expand("results/trees/{sample}/trees_plot.ok", sample=samples['sample']),
         "resources/palmdb"
 
         # The first rule should define the default target files
