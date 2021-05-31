@@ -148,6 +148,7 @@ rule annotate_palmprint:
 rule create_family_cluster:
     input: 
         "results/annotate_palmprint/{sample}_annotated.tsv",
+        "results/blast/{sample}_named_blast.tsv",
         "results/palmscan/{sample}_ppout.faa",
         "resources/palmdb"
     output:
@@ -159,12 +160,18 @@ rule create_family_cluster:
         with open(output[0], 'w') as out:
             out.write('ok')
 
+        blast_dict = dict()
+        with open(input[1]) as blast_handle:
+            for line in blast_handle:
+                fields = line.split("\t")
+                if not fields[1] in blast_dict:
+                    blast_dict[fields[1]]=1
+
         seqs_id_dict = dict()
 
         with open(input[0]) as ann_handle:
             for line in ann_handle:
                 fields = line.split("\t")
-                print(fields)
                 if fields[1] == ".":
                     continue
                 family = re.findall(r'family:(.+?),',fields[2])
@@ -176,24 +183,33 @@ rule create_family_cluster:
                 seqs_id_dict[family].append(fields[0])
 
         tax_dict = dict()
-        records = SeqIO.parse("resources/palmdb/2021-03-14/named.fa.cdhit.90", "fasta")
+        records = SeqIO.parse("resources/palmdb/2021-03-14/named.fa", "fasta")
         for record in records:
-            family = re.findall(r'family:(.+?),',record.description)
-            if not family:
-                continue
-            family = family[0]
-            if family in seqs_id_dict:
-                seqs_id_dict[family].append(record.id)
+            if record.id in blast_dict:
+                family = re.findall(r'family:(.+?),',record.description)
+                if not family:
+                    continue
+                family = family[0]
+                if family in seqs_id_dict:
+                    seqs_id_dict[family].append(record.id)
 
-        seq_dict_ann = SeqIO.to_dict(SeqIO.parse(input[1], "fasta"))
+        seq_dict_ann = SeqIO.to_dict(SeqIO.parse(input[2], "fasta"))
         seq_dict_named = SeqIO.to_dict(SeqIO.parse("resources/palmdb/2021-03-14/named.fa.cdhit.90", "fasta"))
+
         seq_dict_ann.update(seq_dict_named)
 
         for family in seqs_id_dict:
             family_records = list()
             for seq_id in seqs_id_dict[family]:
                 if seq_id in seq_dict_ann:
-                    family_records.append(seq_dict_ann[seq_id])
+                    record = seq_dict_ann[seq_id]
+                    specie = re.findall(r'species:(.+?)$',record.description)
+                    if specie:
+                        specie = specie[0]
+                        record.id += f"_{specie}"
+                        record.id = record.id.replace(" ", "_")
+                        print(record.id)
+                    family_records.append(record)
             
             out_dir = '/'.join(output[0].split('/')[:-1])
             with open(f"{out_dir}/{family}.fasta", 'w') as fout:
