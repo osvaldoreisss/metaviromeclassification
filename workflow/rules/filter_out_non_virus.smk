@@ -114,14 +114,12 @@ rule annotate_palmprint:
                     continue
                 for blast_result in blast_dict[key][thres]:
                     tax_full = tax_dict[blast_result]
-                    print(tax_full)
                     if thres == 90:
                         rank = re.findall(r'species:.+?$',tax_full)
                     elif thres == 75:
                         rank = re.findall(r'genus:.+?,',tax_full)
                     elif thres == 40:
                         rank = re.findall(r'family:.+?,',tax_full)
-                    print(rank)
                     if not rank:
                         continue
                     rank = rank[0]
@@ -129,10 +127,12 @@ rule annotate_palmprint:
                         blast_count[rank]+=1
                     else:
                         blast_count[rank]=1
+
                 if not blast_count:
                     continue
                 max_key = max(blast_count, key=blast_count.get)
-                if blast_count[max_key] >= len(blast_result)/2:
+                b_out = blast_dict[key][thres]
+                if blast_count[max_key] > len(b_out)/2:
                     for hit in blast_dict[key][thres]:
                         if max_key in tax_dict[hit]:
                             tax_full = tax_dict[hit]
@@ -140,7 +140,7 @@ rule annotate_palmprint:
                     break
                 else:
                     annotated_dict[key] = f".\t"
-        print(output)
+
         with open(str(output), 'w') as out:
             for key in annotated_dict.keys():
                 out.write(f"{key}\t{annotated_dict[key]}\n")
@@ -164,9 +164,13 @@ rule create_family_cluster:
         with open(input[0]) as ann_handle:
             for line in ann_handle:
                 fields = line.split("\t")
+                print(fields)
                 if fields[1] == ".":
                     continue
-                family = re.findall(r'family:(.+?),',fields[2])[0]
+                family = re.findall(r'family:(.+?),',fields[2])
+                if not family:
+                    continue
+                family = family[0]
                 if not family in seqs_id_dict:
                     seqs_id_dict[family] = list()
                 seqs_id_dict[family].append(fields[0])

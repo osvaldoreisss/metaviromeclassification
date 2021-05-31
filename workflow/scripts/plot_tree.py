@@ -11,7 +11,7 @@ def main():
 
     tree = Phylo.read(args.tree_file, "newick")
 
-    fig = plt.figure(figsize=(10, 20), dpi=100)
+    fig = plt.figure(figsize=(10, 60), dpi=100)
     axes = fig.add_subplot(1, 1, 1)
     
     Phylo.draw(tree, axes=axes, do_show=False)
